@@ -41,8 +41,19 @@ pontos_angulo = []
 angulo_resultado = None
 pos_angulo = None
 
+# Modo de medição de distância
+modo_distancia = False
+pontos_distancia = []
+
 # Histórico para desfazer
 historico = []
+
+# Edição de distância
+editando_distancia = None
+input_distancia = ""
+
+# Edição de ângulo
+editando_angulo = False
 
 def salvar_estado():
     historico.append(pontos[:])
@@ -117,41 +128,75 @@ while running:
         elif event.type == pygame.MOUSEBUTTONDOWN and modo_manual:
             pos = pygame.mouse.get_pos()
             i = ponto_mais_proximo(pos)
-            if modo_angulo:
-                if i is not None:
-                    pontos_angulo.append(pontos[i])
-                    if len(pontos_angulo) == 3:
-                        angulo_resultado = calcular_angulo(*[(x, y) for x, y, _ in pontos_angulo])
-                        pos_angulo = pontos_angulo[1][:2]
-                        pontos_angulo = []
-            else:
-                if i is not None:
-                    ponto_selecionado = i
-                    arrastando = True
+            if editando_distancia is None:
+                if modo_angulo:
+                    if i is not None:
+                        pontos_angulo.append(pontos[i])
+                        if len(pontos_angulo) == 3:
+                            angulo_resultado = calcular_angulo(*[(x, y) for x, y, _ in pontos_angulo])
+                            pos_angulo = pontos_angulo[1][:2]
+                            print(f"Ângulo: {angulo_resultado:.2f}°")
+                            pontos_angulo = []
+                elif modo_distancia:
+                    if i is not None:
+                        pontos_distancia.append(pontos[i])
+                        if len(pontos_distancia) == 2:
+                            # Medição feita, sai do modo
+                            modo_distancia = False
                 else:
-                    salvar_estado()
-                    pontos.append((pos[0], pos[1], tipo_ponto_atual))
+                    if i is not None:
+                        ponto_selecionado = i
+                        arrastando = True
+                    else:
+                        salvar_estado()
+                        pontos.append((pos[0], pos[1], tipo_ponto_atual))
+            else:
+                editando_distancia = None
 
         elif event.type == pygame.MOUSEBUTTONUP:
             arrastando = False
             ponto_selecionado = None
 
         elif event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_g:
-                mostrar_grade = not mostrar_grade
-            elif event.key == pygame.K_l:
-                mostrar_linhas = not mostrar_linhas
-            elif event.key == pygame.K_z and pygame.key.get_mods() & pygame.KMOD_CTRL:
-                desfazer()
-            elif event.key in (pygame.K_1, pygame.K_2, pygame.K_3):
-                tipo_ponto_atual = int(event.unicode)
-                print(f"Selecionado tipo de ponto: {tipo_ponto_atual}")
-            elif event.key == pygame.K_4:
-                modo_angulo = not modo_angulo
-                pontos_angulo = []
-                angulo_resultado = None
-                pos_angulo = None
-                print("Modo ângulo:", "Ativo" if modo_angulo else "Desativado")
+            if editando_distancia is not None:
+                if event.key == pygame.K_RETURN:
+                    try:
+                        nova_distancia = float(input_distancia)
+                        i, j = editando_distancia
+                        x1, y1, t1 = pontos[i]
+                        x2, y2, t2 = pontos[j]
+                        ang = math.atan2(y2 - y1, x2 - x1)
+                        x2_novo = x1 + nova_distancia * math.cos(ang)
+                        y2_novo = y1 + nova_distancia * math.sin(ang)
+                        pontos[j] = (x2_novo, y2_novo, t2)
+                    except ValueError:
+                        print("Entrada inválida")
+                    input_distancia = ""
+                    editando_distancia = None
+                elif event.key == pygame.K_BACKSPACE:
+                    input_distancia = input_distancia[:-1]
+                else:
+                    input_distancia += event.unicode
+            else:
+                if event.key == pygame.K_g:
+                    mostrar_grade = not mostrar_grade
+                elif event.key == pygame.K_l:
+                    mostrar_linhas = not mostrar_linhas
+                elif event.key == pygame.K_z and pygame.key.get_mods() & pygame.KMOD_CTRL:
+                    desfazer()
+                elif event.key in (pygame.K_1, pygame.K_2, pygame.K_3):
+                    tipo_ponto_atual = int(event.unicode)
+                    print(f"Selecionado tipo de ponto: {tipo_ponto_atual}")
+                elif event.key == pygame.K_4:
+                    modo_angulo = not modo_angulo
+                    pontos_angulo = []
+                    angulo_resultado = None
+                    pos_angulo = None
+                    print("Modo ângulo:", "Ativo" if modo_angulo else "Desativado")
+                elif event.key == pygame.K_d:
+                    modo_distancia = True
+                    pontos_distancia = []
+                    print("Modo distância: Ativo")
 
     if arrastando and ponto_selecionado is not None:
         x, y, t = pontos[ponto_selecionado]
@@ -168,7 +213,20 @@ while running:
             dist = math.hypot(x2 - x1, y2 - y1)
             cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
             dist_text = font.render(f"{dist:.1f}", True, TEXT_COLOR)
-            screen.blit(dist_text, (cx + 5, cy + 5))
+            rect = dist_text.get_rect(center=(cx, cy))
+            screen.blit(dist_text, rect)
+            if pygame.mouse.get_pressed()[0] and rect.collidepoint(pygame.mouse.get_pos()):
+                editando_distancia = (i, i + 1)
+                input_distancia = ""
+
+    # Desenha linha de medição de distância
+    if len(pontos_distancia) == 2:
+        (x1, y1, _), (x2, y2, _) = pontos_distancia
+        pygame.draw.line(screen, RED, (x1, y1), (x2, y2), 2)
+        dist = math.hypot(x2 - x1, y2 - y1)
+        cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
+        dist_text = font.render(f"{dist:.1f}", True, RED)
+        screen.blit(dist_text, (cx + 10, cy - 10))
 
     # Desenha os pontos
     for x, y, t in pontos:
@@ -184,6 +242,12 @@ while running:
     if angulo_resultado and pos_angulo:
         texto_angulo = font.render(f"{angulo_resultado:.2f}°", True, TEXT_COLOR)
         screen.blit(texto_angulo, (pos_angulo[0] + 10, pos_angulo[1] - 10))
+
+    # Mostra valor sendo digitado para distância
+    if editando_distancia is not None:
+        cx, cy = pygame.mouse.get_pos()
+        texto_input = font.render(f"{input_distancia}", True, TEXT_COLOR)
+        screen.blit(texto_input, (cx + 10, cy - 10))
 
     pygame.display.flip()
     clock.tick(60)
