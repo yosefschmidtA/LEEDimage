@@ -16,6 +16,7 @@ GREEN = (0, 255, 0)
 GRID_COLOR = (40, 40, 40)
 LINE_COLOR = (100, 100, 255)
 TEXT_COLOR = (200, 200, 200)
+BLUE = (0, 0, 255)
 
 # Carrega imagens dos pontos
 ponto_imgs = {
@@ -41,7 +42,8 @@ modo_angulo = False
 pontos_angulo = []
 angulo_resultado = None
 pos_angulo = None
-
+editando_angulo = False
+input_angulo = ""
 # Modo de medição de distância
 modo_distancia = False
 pontos_distancia = []
@@ -206,6 +208,14 @@ while running:
                     modo_distancia = not modo_distancia
                     pontos_distancia = []
                     print("Modo distância:", "Ativo" if modo_distancia else "Desativado")
+                    if modo_distancia and len(pontos_distancia) == 1:
+                        i = pontos_distancia[0]
+                        x1, y1, _ = pontos[i]
+                        x2, y2 = pygame.mouse.get_pos()
+                        pygame.draw.line(screen, BLUE, (x1, y1), (x2, y2), 1)
+                        dist = math.hypot(x2 - x1, y2 - y1)
+                        dist_text = font.render(f"{dist:.1f}", True, BLUE)
+                        screen.blit(dist_text, ((x1 + x2) // 2 + 10, (y1 + y2) // 2 - 10))
                 elif event.key == pygame.K_c:
                     medicoes_distancia = []  # Limpa todas as medições
 
