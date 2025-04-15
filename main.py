@@ -12,6 +12,7 @@ clock = pygame.time.Clock()
 # Cores
 BLACK = (0, 0, 0)
 RED = (255, 0, 0)
+GREEN = (0, 255, 0)
 GRID_COLOR = (40, 40, 40)
 LINE_COLOR = (100, 100, 255)
 TEXT_COLOR = (200, 200, 200)
@@ -44,6 +45,7 @@ pos_angulo = None
 # Modo de medição de distância
 modo_distancia = False
 pontos_distancia = []
+medicoes_distancia = []  # Armazena linhas de medição permanentes
 
 # Histórico para desfazer
 historico = []
@@ -54,6 +56,7 @@ input_distancia = ""
 
 # Edição de ângulo
 editando_angulo = False
+
 
 def salvar_estado():
     historico.append(pontos[:])
@@ -137,11 +140,17 @@ while running:
                             pos_angulo = pontos_angulo[1][:2]
                             print(f"Ângulo: {angulo_resultado:.2f}°")
                             pontos_angulo = []
+                    else:
+                        pontos_angulo = []
+                        angulo_resultado = None
+                        pos_angulo = None
                 elif modo_distancia:
                     if i is not None:
-                        pontos_distancia.append(pontos[i])
+                        pontos_distancia.append(i)
                         if len(pontos_distancia) == 2:
-                            # Medição feita, sai do modo
+                            editando_distancia = (pontos_distancia[0], pontos_distancia[1])
+                            input_distancia = ""
+                            pontos_distancia = []
                             modo_distancia = False
                 else:
                     if i is not None:
@@ -194,9 +203,11 @@ while running:
                     pos_angulo = None
                     print("Modo ângulo:", "Ativo" if modo_angulo else "Desativado")
                 elif event.key == pygame.K_d:
-                    modo_distancia = True
+                    modo_distancia = not modo_distancia
                     pontos_distancia = []
-                    print("Modo distância: Ativo")
+                    print("Modo distância:", "Ativo" if modo_distancia else "Desativado")
+                elif event.key == pygame.K_c:
+                    medicoes_distancia = []  # Limpa todas as medições
 
     if arrastando and ponto_selecionado is not None:
         x, y, t = pontos[ponto_selecionado]
@@ -219,12 +230,10 @@ while running:
                 editando_distancia = (i, i + 1)
                 input_distancia = ""
 
-    # Desenha linha de medição de distância
-    if len(pontos_distancia) == 2:
-        (x1, y1, _), (x2, y2, _) = pontos_distancia
-        pygame.draw.line(screen, RED, (x1, y1), (x2, y2), 2)
-        dist = math.hypot(x2 - x1, y2 - y1)
-        cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
+    # Desenha linhas de medição de distância permanentes
+    for (p1, p2, dist) in medicoes_distancia:
+        pygame.draw.line(screen, RED, p1, p2, 2)
+        cx, cy = (p1[0] + p2[0]) // 2, (p1[1] + p2[1]) // 2
         dist_text = font.render(f"{dist:.1f}", True, RED)
         screen.blit(dist_text, (cx + 10, cy - 10))
 
@@ -240,8 +249,18 @@ while running:
 
     # Mostra o ângulo na tela
     if angulo_resultado and pos_angulo:
-        texto_angulo = font.render(f"{angulo_resultado:.2f}°", True, TEXT_COLOR)
+        texto_angulo = font.render(f"{angulo_resultado:.2f}°", True, GREEN)
         screen.blit(texto_angulo, (pos_angulo[0] + 10, pos_angulo[1] - 10))
+
+    # Desenha linhas temporárias de medição de ângulo
+    if modo_angulo and len(pontos_angulo) > 0:
+        pygame.draw.circle(screen, GREEN, pontos_angulo[0][:2], 6)
+        if len(pontos_angulo) > 1:
+            pygame.draw.line(screen, GREEN, pontos_angulo[0][:2], pontos_angulo[1][:2], 1)
+            pygame.draw.circle(screen, GREEN, pontos_angulo[1][:2], 6)
+        if len(pontos_angulo) == 3:
+            pygame.draw.line(screen, GREEN, pontos_angulo[1][:2], pontos_angulo[2][:2], 1)
+            pygame.draw.circle(screen, GREEN, pontos_angulo[2][:2], 6)
 
     # Mostra valor sendo digitado para distância
     if editando_distancia is not None:
