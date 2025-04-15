@@ -39,11 +39,12 @@ mostrar_grade = True
 mostrar_linhas = True
 modo_manual = 1  # 1 para desenhar manualmente, 0 para gerar automaticamente
 modo_angulo = False
-pontos_angulo = []
+pontos_angulo_info = [] # Usar info para guardar índice original
 angulo_resultado = None
 pos_angulo = None
-editando_angulo = False
-input_angulo = ""
+arrastando_angulo = False  # Inicializa a variável aqui
+ponto_selecionado_angulo = None # Inicializa a variável aqui
+
 # Modo de medição de distância
 modo_distancia = False
 pontos_distancia = []
@@ -56,9 +57,8 @@ historico = []
 editando_distancia = None
 input_distancia = ""
 
-# Edição de ângulo
-editando_angulo = False
-
+# Fonte para texto
+font = pygame.font.SysFont(None, 20)
 
 def salvar_estado():
     historico.append(pontos[:])
@@ -104,7 +104,11 @@ def calcular_angulo(a, b, c):
 
     ab = vetor(b, a)
     cb = vetor(b, c)
-    cos_theta = produto_escalar(ab, cb) / (modulo(ab) * modulo(cb))
+    modulo_ab = modulo(ab)
+    modulo_cb = modulo(cb)
+    if modulo_ab == 0 or modulo_cb == 0:
+        return 0  # Evita divisão por zero se os pontos forem coincidentes
+    cos_theta = produto_escalar(ab, cb) / (modulo_ab * modulo_cb)
     angulo = math.degrees(math.acos(max(min(cos_theta, 1), -1)))
     return angulo
 
@@ -136,16 +140,19 @@ while running:
             if editando_distancia is None:
                 if modo_angulo:
                     if i is not None:
-                        pontos_angulo.append(pontos[i])
-                        if len(pontos_angulo) == 3:
-                            angulo_resultado = calcular_angulo(*[(x, y) for x, y, _ in pontos_angulo])
-                            pos_angulo = pontos_angulo[1][:2]
-                            print(f"Ângulo: {angulo_resultado:.2f}°")
-                            pontos_angulo = []
+                        if not any(p_info[3] == i for p_info in pontos_angulo_info): # Verifica se o ponto já foi selecionado para o ângulo
+                            pontos_angulo_info.append((pontos[i][0], pontos[i][1], pontos[i][2], i)) # Guarda o índice original
+                            if len(pontos_angulo_info) == 3:
+                                print("Selecione um ponto para mover e ajustar o ângulo.")
+                        elif len(pontos_angulo_info) == 3:
+                            # Se já tem 3 pontos, ao clicar em um deles, prepara para arrastar esse ponto
+                            for p_info in pontos_angulo_info:
+                                if p_info[3] == i:
+                                    ponto_selecionado_angulo = i
+                                    arrastando_angulo = True
+                                    break
                     else:
-                        pontos_angulo = []
-                        angulo_resultado = None
-                        pos_angulo = None
+                        pontos_angulo_info = []
                 elif modo_distancia:
                     if i is not None:
                         pontos_distancia.append(i)
@@ -167,9 +174,12 @@ while running:
         elif event.type == pygame.MOUSEBUTTONUP:
             arrastando = False
             ponto_selecionado = None
+            arrastando_angulo = False
+            ponto_selecionado_angulo = None
 
         elif event.type == pygame.KEYDOWN:
             if editando_distancia is not None:
+                # Lógica de edição de distância (igual ao seu código)
                 if event.key == pygame.K_RETURN:
                     try:
                         nova_distancia = float(input_distancia)
@@ -200,7 +210,7 @@ while running:
                     print(f"Selecionado tipo de ponto: {tipo_ponto_atual}")
                 elif event.key == pygame.K_4:
                     modo_angulo = not modo_angulo
-                    pontos_angulo = []
+                    pontos_angulo_info = [] # Reinicia a seleção de pontos para o ângulo
                     angulo_resultado = None
                     pos_angulo = None
                     print("Modo ângulo:", "Ativo" if modo_angulo else "Desativado")
@@ -219,9 +229,24 @@ while running:
                 elif event.key == pygame.K_c:
                     medicoes_distancia = []  # Limpa todas as medições
 
+    # Movimento normal dos pontos
     if arrastando and ponto_selecionado is not None:
         x, y, t = pontos[ponto_selecionado]
         pontos[ponto_selecionado] = (*pygame.mouse.get_pos(), t)
+
+    # Movimento de pontos no modo de ângulo
+    if arrastando_angulo and ponto_selecionado_angulo is not None and modo_angulo and len(pontos_angulo_info) == 3:
+        new_x, new_y = pygame.mouse.get_pos()
+        # Atualiza as coordenadas do ponto selecionado
+        index_para_atualizar = ponto_selecionado_angulo
+        tipo_do_ponto = pontos[index_para_atualizar][2]
+        pontos[index_para_atualizar] = (new_x, new_y, tipo_do_ponto)
+
+        # Recalcula o ângulo com as novas posições
+        coords_angulo = [(pontos[i][0], pontos[i][1]) for _, _, _, i in pontos_angulo_info]
+        if len(coords_angulo) == 3:
+            angulo_resultado = calcular_angulo(*coords_angulo)
+            pos_angulo = coords_angulo[1] # O vértice do ângulo é o segundo ponto na lista
 
     # Conecta os pontos com linhas e mostra distâncias
     if mostrar_linhas and len(pontos) > 1:
@@ -252,25 +277,27 @@ while running:
         img = ponto_imgs.get(t, ponto_imgs[3])
         screen.blit(img, (x - img_w // 2, y - img_h // 2))
 
-    # Destaca ponto selecionado
-    if ponto_selecionado is not None:
+    # Destaca ponto selecionado para arrastar normalmente
+    if ponto_selecionado is not None and not arrastando_angulo:
         x, y, _ = pontos[ponto_selecionado]
         pygame.draw.circle(screen, RED, (x, y), 15, 2)
+    # Destaca ponto selecionado para arrastar no modo de ângulo
+    elif ponto_selecionado_angulo is not None and arrastando_angulo and modo_angulo:
+        x, y, _ = pontos[ponto_selecionado_angulo]
+        pygame.draw.circle(screen, BLUE, (x, y), 15, 2)
 
     # Mostra o ângulo na tela
-    if angulo_resultado and pos_angulo:
+    if angulo_resultado is not None and pos_angulo:
         texto_angulo = font.render(f"{angulo_resultado:.2f}°", True, GREEN)
         screen.blit(texto_angulo, (pos_angulo[0] + 10, pos_angulo[1] - 10))
 
     # Desenha linhas temporárias de medição de ângulo
-    if modo_angulo and len(pontos_angulo) > 0:
-        pygame.draw.circle(screen, GREEN, pontos_angulo[0][:2], 6)
-        if len(pontos_angulo) > 1:
-            pygame.draw.line(screen, GREEN, pontos_angulo[0][:2], pontos_angulo[1][:2], 1)
-            pygame.draw.circle(screen, GREEN, pontos_angulo[1][:2], 6)
-        if len(pontos_angulo) == 3:
-            pygame.draw.line(screen, GREEN, pontos_angulo[1][:2], pontos_angulo[2][:2], 1)
-            pygame.draw.circle(screen, GREEN, pontos_angulo[2][:2], 6)
+    if modo_angulo and len(pontos_angulo_info) > 0:
+        coords_desenho_angulo = [(p[0], p[1]) for p in pontos_angulo_info]
+        for i, coord in enumerate(coords_desenho_angulo):
+            pygame.draw.circle(screen, GREEN, coord, 6)
+            if i > 0:
+                pygame.draw.line(screen, GREEN, coords_desenho_angulo[i-1], coord, 1)
 
     # Mostra valor sendo digitado para distância
     if editando_distancia is not None:
