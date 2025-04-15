@@ -36,7 +36,7 @@ tipo_ponto_atual = 3  # Padrão inicial: tipo 3
 
 # Controles
 mostrar_grade = True
-mostrar_linhas = True
+mostrar_linhas = True  # Esta variável agora controlará se TODAS as conexões são mostradas
 modo_manual = 1  # 1 para desenhar manualmente, 0 para gerar automaticamente
 modo_angulo = False
 pontos_angulo_info = [] # Usar info para guardar índice original
@@ -202,7 +202,7 @@ while running:
                 if event.key == pygame.K_g:
                     mostrar_grade = not mostrar_grade
                 elif event.key == pygame.K_l:
-                    mostrar_linhas = not mostrar_linhas
+                    mostrar_linhas = not mostrar_linhas # Agora controla todas as conexões
                 elif event.key == pygame.K_z and pygame.key.get_mods() & pygame.KMOD_CTRL:
                     desfazer()
                 elif event.key in (pygame.K_1, pygame.K_2, pygame.K_3):
@@ -248,22 +248,22 @@ while running:
             angulo_resultado = calcular_angulo(*coords_angulo)
             pos_angulo = coords_angulo[1] # O vértice do ângulo é o segundo ponto na lista
 
-    # Conecta os pontos com linhas e mostra distâncias
+    # Conecta TODOS os pontos entre si e mostra as distâncias
     if mostrar_linhas and len(pontos) > 1:
-        coords = [(x, y) for x, y, _ in pontos]
-        pygame.draw.lines(screen, LINE_COLOR, False, coords, 1)
-
-        for i in range(len(coords) - 1):
-            x1, y1 = coords[i]
-            x2, y2 = coords[i + 1]
-            dist = math.hypot(x2 - x1, y2 - y1)
-            cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
-            dist_text = font.render(f"{dist:.1f}", True, TEXT_COLOR)
-            rect = dist_text.get_rect(center=(cx, cy))
-            screen.blit(dist_text, rect)
-            if pygame.mouse.get_pressed()[0] and rect.collidepoint(pygame.mouse.get_pos()):
-                editando_distancia = (i, i + 1)
-                input_distancia = ""
+        for i in range(len(pontos)):
+            for j in range(i + 1, len(pontos)):
+                p1 = (pontos[i][0], pontos[i][1])
+                p2 = (pontos[j][0], pontos[j][1])
+                pygame.draw.line(screen, LINE_COLOR, p1, p2, 1)
+                dist = math.hypot(p2[0] - p1[0], p2[1] - p1[1])
+                cx, cy = (p1[0] + p2[0]) // 2, (p1[1] + p2[1]) // 2
+                dist_text = font.render(f"{dist:.1f}", True, TEXT_COLOR)
+                rect = dist_text.get_rect(center=(cx, cy))
+                screen.blit(dist_text, rect)
+                # Opcional: Lógica para edição de distância ao clicar na linha (pode ficar complexo com muitas linhas)
+                # if pygame.mouse.get_pressed()[0] and rect.collidepoint(pygame.mouse.get_pos()):
+                #     editando_distancia = (i, j) # Precisa adaptar a lógica de índice aqui
+                #     input_distancia = ""
 
     # Desenha linhas de medição de distância permanentes
     for (p1, p2, dist) in medicoes_distancia:
