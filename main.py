@@ -1,9 +1,10 @@
 import pygame
 import sys
+import math
 
 # Inicialização
 pygame.init()
-size = width, height = 800, 800
+size = width, height = 800, 600
 screen = pygame.display.set_mode(size)
 pygame.display.set_caption("LEED com Imagem de Ponto")
 clock = pygame.time.Clock()
@@ -11,56 +12,178 @@ clock = pygame.time.Clock()
 # Cores
 BLACK = (0, 0, 0)
 RED = (255, 0, 0)
+GRID_COLOR = (40, 40, 40)
+LINE_COLOR = (100, 100, 255)
+TEXT_COLOR = (200, 200, 200)
 
-# Carrega a imagem do ponto
-ponto_img = pygame.image.load("ponto.png").convert_alpha()
-ponto_rect = ponto_img.get_rect()
-img_w, img_h = ponto_rect.width, ponto_rect.height
+# Carrega imagens dos pontos
+ponto_imgs = {
+    1: pygame.image.load("LEEDintense1.png").convert_alpha(),
+    2: pygame.image.load("LEEDintense2.png").convert_alpha(),
+    3: pygame.image.load("LEEDintense3.png").convert_alpha()
+}
 
-# Lista de pontos
+# Assume que todas as imagens têm o mesmo tamanho
+img_w, img_h = ponto_imgs[1].get_rect().size
+
+# Lista de pontos: (x, y, tipo)
 pontos = []
 ponto_selecionado = None
 arrastando = False
+tipo_ponto_atual = 3  # Padrão inicial: tipo 3
+
+# Controles
+mostrar_grade = True
+mostrar_linhas = True
+modo_manual = 1  # 1 para desenhar manualmente, 0 para gerar automaticamente
+modo_angulo = False
+pontos_angulo = []
+angulo_resultado = None
+pos_angulo = None
+
+# Histórico para desfazer
+historico = []
+
+def salvar_estado():
+    historico.append(pontos[:])
+
+def desfazer():
+    if historico:
+        global pontos
+        pontos = historico.pop()
+
+def espelhar_pontos(eixo='vertical'):
+    novos_pontos = []
+    for (x, y, tipo) in pontos:
+        if eixo == 'vertical':
+            novos_pontos.append((width - x, y, tipo))
+        elif eixo == 'horizontal':
+            novos_pontos.append((x, height - y, tipo))
+        elif eixo == 'centro':
+            novos_pontos.append((width - x, height - y, tipo))
+    salvar_estado()
+    pontos.extend(novos_pontos)
+
+def desenha_grade(screen, espacamento=50):
+    for x in range(0, width, espacamento):
+        pygame.draw.line(screen, GRID_COLOR, (x, 0), (x, height))
+    for y in range(0, height, espacamento):
+        pygame.draw.line(screen, GRID_COLOR, (0, y), (width, y))
 
 def ponto_mais_proximo(pos):
-    for i, (x, y) in enumerate(pontos):
+    for i, (x, y, _) in enumerate(pontos):
         if (x - pos[0]) ** 2 + (y - pos[1]) ** 2 < 20**2:
             return i
     return None
+
+def calcular_angulo(a, b, c):
+    def vetor(u, v):
+        return (v[0] - u[0], v[1] - u[1])
+
+    def produto_escalar(u, v):
+        return u[0]*v[0] + u[1]*v[1]
+
+    def modulo(v):
+        return math.hypot(v[0], v[1])
+
+    ab = vetor(b, a)
+    cb = vetor(b, c)
+    cos_theta = produto_escalar(ab, cb) / (modulo(ab) * modulo(cb))
+    angulo = math.degrees(math.acos(max(min(cos_theta, 1), -1)))
+    return angulo
+
+# Se modo automático, adiciona pontos aqui
+if not modo_manual:
+    pontos = [
+        (200, 200, 1), (300, 200, 2), (400, 200, 3),
+        (200, 300, 1), (300, 300, 2), (400, 300, 3)
+    ]
+
+# Fonte para texto
+font = pygame.font.SysFont(None, 20)
 
 # Loop principal
 running = True
 while running:
     screen.fill(BLACK)
 
+    if mostrar_grade:
+        desenha_grade(screen)
+
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
 
-        elif event.type == pygame.MOUSEBUTTONDOWN:
+        elif event.type == pygame.MOUSEBUTTONDOWN and modo_manual:
             pos = pygame.mouse.get_pos()
             i = ponto_mais_proximo(pos)
-            if i is not None:
-                ponto_selecionado = i
-                arrastando = True
+            if modo_angulo:
+                if i is not None:
+                    pontos_angulo.append(pontos[i])
+                    if len(pontos_angulo) == 3:
+                        angulo_resultado = calcular_angulo(*[(x, y) for x, y, _ in pontos_angulo])
+                        pos_angulo = pontos_angulo[1][:2]
+                        pontos_angulo = []
             else:
-                pontos.append(pos)
+                if i is not None:
+                    ponto_selecionado = i
+                    arrastando = True
+                else:
+                    salvar_estado()
+                    pontos.append((pos[0], pos[1], tipo_ponto_atual))
 
         elif event.type == pygame.MOUSEBUTTONUP:
             arrastando = False
             ponto_selecionado = None
 
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_g:
+                mostrar_grade = not mostrar_grade
+            elif event.key == pygame.K_l:
+                mostrar_linhas = not mostrar_linhas
+            elif event.key == pygame.K_z and pygame.key.get_mods() & pygame.KMOD_CTRL:
+                desfazer()
+            elif event.key in (pygame.K_1, pygame.K_2, pygame.K_3):
+                tipo_ponto_atual = int(event.unicode)
+                print(f"Selecionado tipo de ponto: {tipo_ponto_atual}")
+            elif event.key == pygame.K_4:
+                modo_angulo = not modo_angulo
+                pontos_angulo = []
+                angulo_resultado = None
+                pos_angulo = None
+                print("Modo ângulo:", "Ativo" if modo_angulo else "Desativado")
+
     if arrastando and ponto_selecionado is not None:
-        pontos[ponto_selecionado] = pygame.mouse.get_pos()
+        x, y, t = pontos[ponto_selecionado]
+        pontos[ponto_selecionado] = (*pygame.mouse.get_pos(), t)
 
-    # Desenha os pontos com a imagem
-    for x, y in pontos:
-        screen.blit(ponto_img, (x - img_w // 2, y - img_h // 2))
+    # Conecta os pontos com linhas e mostra distâncias
+    if mostrar_linhas and len(pontos) > 1:
+        coords = [(x, y) for x, y, _ in pontos]
+        pygame.draw.lines(screen, LINE_COLOR, False, coords, 1)
 
-    # Destaca ponto selecionado (círculo vermelho)
+        for i in range(len(coords) - 1):
+            x1, y1 = coords[i]
+            x2, y2 = coords[i + 1]
+            dist = math.hypot(x2 - x1, y2 - y1)
+            cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
+            dist_text = font.render(f"{dist:.1f}", True, TEXT_COLOR)
+            screen.blit(dist_text, (cx + 5, cy + 5))
+
+    # Desenha os pontos
+    for x, y, t in pontos:
+        img = ponto_imgs.get(t, ponto_imgs[3])
+        screen.blit(img, (x - img_w // 2, y - img_h // 2))
+
+    # Destaca ponto selecionado
     if ponto_selecionado is not None:
-        x, y = pontos[ponto_selecionado]
+        x, y, _ = pontos[ponto_selecionado]
         pygame.draw.circle(screen, RED, (x, y), 15, 2)
+
+    # Mostra o ângulo na tela
+    if angulo_resultado and pos_angulo:
+        texto_angulo = font.render(f"{angulo_resultado:.2f}°", True, TEXT_COLOR)
+        screen.blit(texto_angulo, (pos_angulo[0] + 10, pos_angulo[1] - 10))
 
     pygame.display.flip()
     clock.tick(60)
