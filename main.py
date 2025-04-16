@@ -20,8 +20,8 @@ BLUE = (0, 0, 255)
 
 # Carrega imagens dos pontos
 ponto_imgs = {
-    1: pygame.image.load("LEEDintense1.png").convert_alpha(),
-    2: pygame.image.load("LEEDintense2.png").convert_alpha(),
+    2: pygame.image.load("LEEDintense1.png").convert_alpha(),
+    1: pygame.image.load("LEEDintense2.png").convert_alpha(),
     3: pygame.image.load("LEEDintense3.png").convert_alpha()
 }
 
